@@ -1,0 +1,59 @@
+@font-face {
+  font-family: 'D2Coding Korean';
+  src: url('./fonts/D2Coding.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF, U+FFA0-FFDC;
+}
+:root {
+  color-scheme: dark;
+  font-family: 'D2Coding Korean', 'Ubuntu Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 16px;
+  line-height: 1.25;
+  color: #eeeeee;
+  background: #000;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; padding: 8px; background: #000; }
+.terminal, .shell { width: 100%; }
+.welcome { margin-bottom: 1.25em; }
+.motd { font: inherit; white-space: pre-wrap; margin: 0 0 1.25em; }
+.instructions { margin-bottom: 1.25em; }
+.logo {
+  font: inherit;
+  font-size: clamp(5px, 1.3vw, 14px);
+  line-height: 1;
+  color: #eee;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0 0 2em;
+}
+.status { display: flex; flex-wrap: wrap; gap: 1ch 3ch; margin-bottom: 1.25em; }
+h1 { font: inherit; margin: 0; color: #bb9af7; }
+#mode { color: #73daca; }
+#empty { margin-bottom: 1.25em; }
+#passage { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100ch; }
+#passage:empty { display: none; }
+#passage.typing::after { content: '█'; animation: blink 1s steps(2) infinite; }
+#attribution { white-space: pre-line; margin: 1.5em 0; }
+#congratulations { color: #55ff55; margin: 1.5em 0; }
+[hidden] { display: none !important; }
+#message { margin: 1.25em 0; }
+#message.feedback { color: #7aa2f7; }
+#message.error { color: #f7768e; }
+form { display: flex; align-items: baseline; gap: 1ch; margin: 0; }
+label { white-space: nowrap; }
+.user { color: #55ff55; }
+.directory { color: #729fcf; }
+input {
+  flex: 1; min-width: 0; padding: 0; margin: 0;
+  border: 0; border-radius: 0; outline: none;
+  background: transparent; color: inherit; font: inherit;
+  caret-color: #fff; caret-shape: block;
+}
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.sr-only:focus-visible { position: static; width: auto; height: auto; margin: 0; padding: 2px 8px; clip-path: none; }
+@keyframes blink { 50% { opacity: 0; } }
+@media(max-width: 600px) { :root { font-size: 14px; } }
+@media(prefers-reduced-motion: reduce) { * { animation: none !important; } }

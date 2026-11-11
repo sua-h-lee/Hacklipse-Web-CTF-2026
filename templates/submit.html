@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hacklipse — Recovery Terminal</title><link rel="stylesheet" href="{{ url_for('static', filename='terminal.css') }}"></head>
+<body><main class="terminal">
+<section class="shell">
+<div class="welcome">Welcome to Hacklipse Web CTF 2026 (Recovery Terminal)</div>
+<pre class="motd"> * Find the vulnerabilities. Recover the story.
+ * Submit each flag here. Every discovery reveals a new passage.
+ * There are 15 flags waiting to be found.</pre>
+<div class="instructions">Enter a flag at the prompt below and press Enter.<br>Click the passage or press Space outside the input to finish typing.<br>Your progress is remembered in this browser.</div>
+<pre class="logo" role="img" aria-label="HACKLIPSE 로고">{{ logo }}</pre>
+<div class="status"><h1>RECOVERED <span id="count">00</span> / 15</h1><span id="mode">AWAITING SIGNAL</span></div>
+<div id="empty">Waiting for your first discovery.</div>
+<article id="passage" aria-label="복구된 글"></article>
+<div id="attribution" hidden aria-label="작품명과 작가" aria-live="polite"></div>
+<p id="congratulations" hidden role="status">Congratulations! You've discovered all 15 flags and recovered the complete story.<br>Thank you for playing Hacklipse Web CTF 2026.</p>
+<p id="message" role="status" aria-live="polite">Ready.</p>
+<form id="submission"><label for="flag"><span class="user">visitor@hacklipse</span>:<span class="directory">~</span>$</label><input id="flag" name="flag" aria-label="플래그 입력" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="1024" required autofocus><button class="sr-only" type="submit">플래그 제출</button></form>
+</section></main>
+<script id="initial" type="application/json">{{ initial|tojson }}</script><script id="csrf" type="application/json">{{ csrf|tojson }}</script><script src="{{ url_for('static', filename='terminal.js') }}"></script>
+</body></html>
