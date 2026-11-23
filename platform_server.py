@@ -122,7 +122,7 @@ def home(n=1):
         solved = {i + 1 for i, in db.execute("SELECT flag_id FROM solves WHERE player=?", (player,))}
         env = db.execute("SELECT problem,url FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
     return render_template("platform.html", catalog=catalog, n=n, solved=solved, env=env,
-                           pilot=pilot, score=sum(catalog[i-1]["points"] for i in solved))
+                           pilot=pilot, active_sample=flags[n-1] if pilot and env and env[0]==n else None, score=sum(catalog[i-1]["points"] for i in solved))
 
 
 @app.post("/problems/<int:n>/submit")
@@ -174,7 +174,11 @@ def start(n):
         with database() as db:
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT problem FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
-            if not pilot and old and old[0] == n:
+            if db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
+                return {"solved": True} if pilot else redirect(url_for("home", n=n))
+            if old and old[0] == n:
+                if pilot:
+                    return {"sample": flags[n-1]}
                 return redirect(url_for("home", n=n))
             if not pilot and old and request.form.get("replace") != str(old[0]):
                 flash("현재 실행 중인 환경을 확인해 주세요.")

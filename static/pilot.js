@@ -6,6 +6,10 @@ async function start() {
   try {
     const response = await fetch(form.action, {method:"POST", body:new FormData(form)});
     const data = await response.json();
+    if (response.ok && data.solved) {
+      location.reload();
+      return;
+    }
     if (!response.ok || !data.sample) throw new Error();
     output.textContent = data.sample;
   } catch {
