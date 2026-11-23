@@ -2,6 +2,7 @@ from contextlib import closing, contextmanager
 import hashlib
 import json
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -27,10 +28,11 @@ if not key.exists():
 app.config.update(SECRET_KEY=os.environ.get("SECRET_KEY") or key.read_text(),
                   SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.getenv("CTF_HTTPS") == "1", MAX_CONTENT_LENGTH=8192)
-flags = json.loads(os.getenv("CTF_FLAGS_JSON", "[]"))
-if flags and (not isinstance(flags, list) or len(flags) != 15 or
-              not all(isinstance(f, str) and f.strip() == f and f for f in flags) or len(set(flags)) != 15):
-    raise ValueError("Configure 15 distinct flags")
+pilot = os.getenv("CTF_PILOT") == "1"
+flags = ["HKL{testflag}"] * 15 if pilot else json.loads(os.getenv("CTF_FLAGS_JSON", "[]"))
+if not pilot and flags and (not isinstance(flags, list) or len(flags) != 15 or
+              not all(isinstance(f, str) and re.fullmatch(r"HKL\{[^{}\r\n]+\}", f) for f in flags) or len(set(flags)) != 15):
+    raise ValueError("Configure 15 distinct HKL{...} flags")
 catalog = [{"title": f"문제 {n:02}", "description": "문제 설명을 준비하고 있습니다.", "points": 100}
            for n in range(1, 16)]
 if os.getenv("CTF_CATALOG"):
@@ -120,7 +122,7 @@ def home(n=1):
         solved = {i + 1 for i, in db.execute("SELECT flag_id FROM solves WHERE player=?", (player,))}
         env = db.execute("SELECT problem,url FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
     return render_template("platform.html", catalog=catalog, n=n, solved=solved, env=env,
-                           score=sum(catalog[i-1]["points"] for i in solved))
+                           pilot=pilot, score=sum(catalog[i-1]["points"] for i in solved))
 
 
 @app.post("/problems/<int:n>/submit")
@@ -163,6 +165,8 @@ def start(n):
     validate_problem(n)
     base, token = os.getenv("CTF_RUNNER_URL"), os.getenv("CTF_RUNNER_TOKEN")
     if not base or not token:
+        if pilot:
+            return {"error": "테스트 실행 서버 연결 대기 중입니다."}, 503
         flash("문제 실행 서버 연결 대기 중입니다.")
         return redirect(url_for("home", n=n))
     player = session["account"]
@@ -170,9 +174,9 @@ def start(n):
         with database() as db:
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT problem FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
-            if old and old[0] == n:
+            if not pilot and old and old[0] == n:
                 return redirect(url_for("home", n=n))
-            if old and request.form.get("replace") != str(old[0]):
+            if not pilot and old and request.form.get("replace") != str(old[0]):
                 flash("현재 실행 중인 환경을 확인해 주세요.")
                 return redirect(url_for("home", n=n))
             endpoint = urlsplit(base)
@@ -186,10 +190,19 @@ def start(n):
                 if len(payload) > 8192:
                     raise ValueError("Invalid runner response size")
                 result = json.loads(payload)
+            if pilot:
+                expiry = float(result["expires"])
+                sample = result["sample"]
+                if sample != flags[n-1] or not time.time() < expiry <= time.time()+1800:
+                    raise ValueError("Invalid test fixture")
+                db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,"",expiry))
+                return {"sample": sample}
             link, expires = result["url"], float(result["expires"])
             if urlsplit(link).scheme not in ("http","https") or not urlsplit(link).hostname or not time.time() < expires < time.time()+1810:
                 raise ValueError()
             db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,link,expires))
     except (URLError, OSError, ValueError, TypeError, KeyError, sqlite3.OperationalError):
+        if pilot:
+            return {"error": "테스트 환경을 시작하지 못했습니다."}, 503
         flash("환경을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.")
     return redirect(url_for("home", n=n))
