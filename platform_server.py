@@ -241,7 +241,7 @@ def start(n):
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT problem,url FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
             web_problem = pilot and n == 1
-            if db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
+            if not web_problem and db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
                 return {"solved": True} if pilot and not web_problem else redirect(url_for("home", n=n))
             if web_problem and old and old[0] == n and old[1] not in ("site", ""):
                 return redirect(url_for("home", n=n), code=303)
