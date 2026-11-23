@@ -125,6 +125,34 @@ def home(n=1):
                            pilot=pilot, now=time.time(), active_sample=flags[n-1] if pilot and env and env[0]==n else None, score=sum(catalog[i-1]["points"] for i in solved))
 
 
+def stop_environment(db, player, n, expected=None):
+    row = db.execute("SELECT url FROM environments WHERE player=? AND problem=?", (player, n)).fetchone()
+    if not row or (expected is not None and row[0] != expected):
+        return
+    base = os.getenv("CTF_RUNNER_URL", "").rstrip("/")
+    token = os.getenv("CTF_RUNNER_TOKEN")
+    if not token or not base.startswith("https://"):
+        raise ValueError("Invalid runner configuration")
+    req = Request(f"{base}/environments/{player}/{n}", method="DELETE",
+                  headers={"Authorization": "Bearer " + token})
+    with runner_client.open(req, timeout=15) as response:
+        if response.status != 204:
+            raise ValueError("Runner did not confirm termination")
+    db.execute("DELETE FROM environments WHERE player=? AND problem=?", (player, n))
+
+
+@app.post("/problems/<int:n>/stop")
+def stop(n):
+    validate_problem(n)
+    try:
+        with database() as db:
+            db.execute("BEGIN IMMEDIATE")
+            stop_environment(db, session["account"], n, request.form.get("instance", ""))
+    except (OSError, ValueError):
+        flash("인스턴스를 종료하지 못했습니다. 다시 시도해 주세요.")
+    return redirect(url_for("home", n=n), code=303)
+
+
 @app.post("/problems/<int:n>/submit")
 def submit(n):
     validate_problem(n)
@@ -133,6 +161,10 @@ def submit(n):
     elif secrets.compare_digest(request.form.get("flag","").strip().encode(), flags[n-1].encode()):
         with database() as db:
             fresh = db.execute("INSERT OR IGNORE INTO solves VALUES (?,?)", (session["account"], n-1)).rowcount
+            try:
+                stop_environment(db, session["account"], n)
+            except (OSError, ValueError):
+                flash("인스턴스 자동 종료에 실패했습니다. 종료하기를 눌러 다시 시도해 주세요.")
         flash(f"ACCEPTED · +{catalog[n-1]['points']}점" if fresh else "이미 해결한 문제입니다.")
     else:
         flash("INCORRECT · 다시 시도해 주세요.")
@@ -209,8 +241,8 @@ def start(n):
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT problem,url FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
             web_problem = pilot and n == 1
-            if not web_problem and db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
-                return {"solved": True} if pilot else redirect(url_for("home", n=n))
+            if db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
+                return {"solved": True} if pilot and not web_problem else redirect(url_for("home", n=n))
             if web_problem and old and old[0] == n and old[1] not in ("site", ""):
                 return redirect(url_for("home", n=n), code=303)
             if not web_problem and old and old[0] == n:
