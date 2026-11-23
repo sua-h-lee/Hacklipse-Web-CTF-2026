@@ -1,0 +1,42 @@
+form { display:flex; flex-wrap:wrap; align-items:baseline; gap:1ch 2ch }
+a, button { font:inherit; color:#729fcf; background:transparent; border:0; padding:2px 0; cursor:pointer; text-decoration:none }
+button::before { content:'[ ' }
+button::after { content:' ]' }
+a:hover, button:hover { text-decoration:underline }
+.on { color:#55ff55 }
+aside .on::before { content:'> ' }
+.grid { display:grid; grid-template-columns:minmax(16ch,28ch) minmax(0,1fr); gap:3ch }
+aside a { display:block; line-height:1.5 }
+small { font:inherit; color:#aaa }
+.signal { color:#7aa2f7 }
+.answer { margin-top:2em }
+label { white-space:normal }
+:focus-visible { outline:1px dashed #eee; outline-offset:2px }
+@media(max-width:650px){.grid{grid-template-columns:1fr}aside{max-height:12em;overflow:auto}.logo{font-size:1.44vw}}
+.command { gap:1ch; flex-wrap:nowrap; max-width:88ch; cursor:text }
+.command input { flex:1; width:auto; max-width:none; border:0; outline:none; caret-color:#eee; caret-shape:block }
+.command:focus-within label { color:#fff }
+
+.answer.command input[name="flag"] { border-bottom:1px solid #888 }
+
+.boot-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100svh;
+  background: #000;
+  color: #fff;
+  text-align: center;
+}
+.boot-screen main { width: 100%; min-width: 0; }
+.boot-screen .user, .boot-screen .logo, .boot-screen a { color: inherit; }
+.boot-screen .logo { font-size: clamp(3px, 1.4vw, 14px); }
+.boot-screen a:focus-visible { outline-color: #fff; }
+.login-screen h1, .login-screen .directory, .login-screen .signal { color: inherit; }
+.login-screen .command { width: fit-content; max-width: 100%; margin-inline: auto; }
+.login-screen .command input { width: 20ch; max-width: 42vw; caret-color: #fff; }
+.login-screen .user, .login-screen button, .login-screen .command:focus-within label { color: #fff; }
+.problem-screen { display:grid; justify-items:center; align-items:start; grid-template-rows:auto 1fr; min-height:100svh; padding:0; }
+.player-score strong { color:#fff; }
+.competition-header { width:min(88ch,100%); display:flex; align-items:center; justify-content:space-between; gap:2ch; padding:12px clamp(12px,3vw,40px); }
+.problem-screen main { width:min(88ch,100%); padding:0 clamp(12px,3vw,40px) 2rem; }
+.problem-screen .player-score { margin:0.75em 0 1.25em; }
