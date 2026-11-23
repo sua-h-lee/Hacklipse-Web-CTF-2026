@@ -120,9 +120,9 @@ def home(n=1):
     player = session["account"]
     with database() as db:
         solved = {i + 1 for i, in db.execute("SELECT flag_id FROM solves WHERE player=?", (player,))}
-        env = db.execute("SELECT problem,url FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
+        env = db.execute("SELECT problem,url,expires FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
     return render_template("platform.html", catalog=catalog, n=n, solved=solved, env=env,
-                           pilot=pilot, active_sample=flags[n-1] if pilot and env and env[0]==n else None, score=sum(catalog[i-1]["points"] for i in solved))
+                           pilot=pilot, now=time.time(), active_sample=flags[n-1] if pilot and env and env[0]==n else None, score=sum(catalog[i-1]["points"] for i in solved))
 
 
 @app.post("/problems/<int:n>/submit")
@@ -162,12 +162,19 @@ def security_headers(response):
     return response
 
 
-@app.get("/problems/1/site/<asset>")
-def club_site(asset):
+@app.get("/problems/1/site/<instance>/<asset>")
+def club_site(instance, asset):
     if not pilot or asset not in ("index.html", "style.css"):
         abort(404)
     base = os.environ["CTF_RUNNER_URL"].rstrip("/")
     player = session["account"]
+    with database() as db:
+        active = db.execute(
+            "SELECT 1 FROM environments WHERE player=? AND problem=1 AND url=? AND expires>?",
+            (player, instance, time.time()),
+        ).fetchone()
+    if not active:
+        abort(404)
     req = Request(f"{base}/environments/{player}/site/{asset}",
                   headers={"Authorization": "Bearer " + os.environ["CTF_RUNNER_TOKEN"]})
     try:
@@ -177,6 +184,8 @@ def club_site(asset):
                 abort(502)
     except HTTPError as error:
         if error.code == 410:
+            with database() as db:
+                db.execute("DELETE FROM environments WHERE player=? AND problem=1 AND url=?", (player, instance))
             flash("환경이 종료되었습니다. 접속하기를 눌러 다시 시작하세요.")
             return redirect(url_for("home", n=1))
         abort(502)
@@ -198,10 +207,12 @@ def start(n):
     try:
         with database() as db:
             db.execute("BEGIN IMMEDIATE")
-            old = db.execute("SELECT problem FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
+            old = db.execute("SELECT problem,url FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
             web_problem = pilot and n == 1
             if not web_problem and db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
                 return {"solved": True} if pilot else redirect(url_for("home", n=n))
+            if web_problem and old and old[0] == n and old[1] not in ("site", ""):
+                return redirect(url_for("home", n=n), code=303)
             if not web_problem and old and old[0] == n:
                 if pilot:
                     return {"sample": flags[n-1]}
@@ -225,8 +236,9 @@ def start(n):
                 if web_problem:
                     if result.get("web") is not True or not time.time() < expiry <= time.time()+1810:
                         raise ValueError("Invalid web environment")
-                    db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,"site",expiry))
-                    return redirect(url_for("club_site", asset="index.html"), code=303)
+                    instance = secrets.token_urlsafe(24)
+                    db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,instance,expiry))
+                    return redirect(url_for("home", n=n), code=303)
                 sample = result["sample"]
                 if sample != flags[n-1] or not time.time() < expiry <= time.time()+1800:
                     raise ValueError("Invalid test fixture")
