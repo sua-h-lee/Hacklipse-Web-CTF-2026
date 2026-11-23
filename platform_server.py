@@ -7,12 +7,12 @@ import secrets
 import sqlite3
 import time
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import click
-from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, flash, redirect, render_template, request, session, url_for
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("CTF_DATA", ROOT / "instance"))
@@ -153,11 +153,36 @@ def security_headers(response):
         "default-src 'self'; object-src 'none'; base-uri 'none'; "
         "frame-ancestors 'none'; form-action 'self'"
     )
+    if request.endpoint == "club_site":
+        response.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     if request.endpoint != "static":
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.get("/problems/1/site/<asset>")
+def club_site(asset):
+    if not pilot or asset not in ("index.html", "style.css"):
+        abort(404)
+    base = os.environ["CTF_RUNNER_URL"].rstrip("/")
+    player = session["account"]
+    req = Request(f"{base}/environments/{player}/site/{asset}",
+                  headers={"Authorization": "Bearer " + os.environ["CTF_RUNNER_TOKEN"]})
+    try:
+        with runner_client.open(req, timeout=5) as upstream:
+            data = upstream.read(65537)
+            if len(data) > 65536:
+                abort(502)
+    except HTTPError as error:
+        if error.code == 410:
+            flash("환경이 종료되었습니다. 접속하기를 눌러 다시 시작하세요.")
+            return redirect(url_for("home", n=1))
+        abort(502)
+    except OSError:
+        abort(503)
+    return Response(data, mimetype="text/css" if asset == "style.css" else "text/html")
 
 
 @app.post("/problems/<int:n>/start")
@@ -174,9 +199,10 @@ def start(n):
         with database() as db:
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT problem FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
-            if db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
+            web_problem = pilot and n == 1
+            if not web_problem and db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
                 return {"solved": True} if pilot else redirect(url_for("home", n=n))
-            if old and old[0] == n:
+            if not web_problem and old and old[0] == n:
                 if pilot:
                     return {"sample": flags[n-1]}
                 return redirect(url_for("home", n=n))
@@ -196,6 +222,11 @@ def start(n):
                 result = json.loads(payload)
             if pilot:
                 expiry = float(result["expires"])
+                if web_problem:
+                    if result.get("web") is not True or not time.time() < expiry <= time.time()+1810:
+                        raise ValueError("Invalid web environment")
+                    db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,"site",expiry))
+                    return redirect(url_for("club_site", asset="index.html"), code=303)
                 sample = result["sample"]
                 if sample != flags[n-1] or not time.time() < expiry <= time.time()+1800:
                     raise ValueError("Invalid test fixture")
