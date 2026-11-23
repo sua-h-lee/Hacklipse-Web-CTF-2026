@@ -29,7 +29,7 @@ app.config.update(SECRET_KEY=os.environ.get("SECRET_KEY") or key.read_text(),
                   SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.getenv("CTF_HTTPS") == "1", MAX_CONTENT_LENGTH=8192)
 pilot = os.getenv("CTF_PILOT") == "1"
-flags = ["HKL{testflag}"] * 15 if pilot else json.loads(os.getenv("CTF_FLAGS_JSON", "[]"))
+flags = [f"HKL{{testflag{n}}}" for n in range(1, 16)] if pilot else json.loads(os.getenv("CTF_FLAGS_JSON", "[]"))
 if not pilot and flags and (not isinstance(flags, list) or len(flags) != 15 or
               not all(isinstance(f, str) and re.fullmatch(r"HKL\{[^{}\r\n]+\}", f) for f in flags) or len(set(flags)) != 15):
     raise ValueError("Configure 15 distinct HKL{...} flags")
