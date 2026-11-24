@@ -1,13 +1,19 @@
-<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hacklipse Web CTF 2026</title><link rel="stylesheet" href="/static/terminal.css"><link rel="stylesheet" href="/static/platform.css?v=10"><body class="{{ 'boot-screen login-screen' if login else 'problem-screen' }}">
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hacklipse CTF 2026</title><link rel="stylesheet" href="/static/terminal.css"><link rel="stylesheet" href="/static/platform.css?v=15"><body class="{{ 'boot-screen login-screen' if login else 'problem-screen' }}">
 {% macro csrf() %}<input type="hidden" name="csrf" value="{{ session.csrf }}">{% endmacro %}
 {% if not login %}<header class="competition-header"><strong>Hacklipse Web CTF 2026</strong><form method="post" action="/logout">{{ csrf() }}<button>로그아웃</button></form></header>{% endif %}
 <main>
 {% for message in get_flashed_messages() %}<p role="status" class="signal">{{ message }}</p>{% endfor %}
 {% if login %}<h1>참가자 로그인</h1><p>참가 코드를 입력하고 Enter를 누르세요.</p><form class="command" method="post">{{ csrf() }}<label for="code"><span class="user">visitor@hacklipse</span>:<span class="directory">~</span>$</label><input id="code" aria-label="참가 코드" name="code" type="password" required autofocus enterkeyhint="go"><button class="sr-only">접속</button></form>
 {% else %}
-<p class="player-score">{{ session.get("name", "player") }} · 내 점수 <strong>{{ score }}점</strong> · {{ solved|length }} / 15 해결</p>
-<div class="grid"><aside aria-label="문제 목록">{% for p in catalog %}<a class="{{ 'on' if loop.index == n }}" href="/problems/{{ loop.index }}">{{ '%02d'|format(loop.index) }} {{ p.title }} <small>{{ '해결' if loop.index in solved }}</small></a>{% endfor %}</aside><section><small>PROBLEM {{ '%02d'|format(n) }} · {{ catalog[n-1].points }} PT</small><h1>{{ catalog[n-1].title }}</h1><p>{{ "Hacklipse 소개 페이지입니다." if pilot and n == 1 else catalog[n-1].description }}</p>
-{% if pilot and n in web_problems %}{% if env and env[0] == n and env[1] not in ('site', '') %}
+<section class="player-status" aria-label="내 대회 현황">
+  <p class="status-prompt"><span class="user">{{ session.get("name", "player") }}@hacklipse</span>:<span class="directory">~</span>$ status</p>
+  <div class="status-totals"><div class="status-row"><span>MY SCORE</span><strong>{{ score }} / {{ max_score }} PT</strong></div><div class="status-row"><span>SOLVED</span><strong>{{ solved|length }} / {{ catalog|length }}</strong></div></div>
+  <div class="status-categories">{% for category in categories %}<div class="status-row"><span>{{ category.name }}</span><strong>{{ category.solved }} / {{ category.total }}</strong></div>{% endfor %}</div>
+</section>
+<div class="grid"><aside aria-label="문제 목록">{% for p in catalog %}<a class="{{ 'on' if loop.index == n }}" href="/problems/{{ loop.index }}"><span>{{ '%02d'|format(loop.index) }} {{ p.title }}</span><small>{{ '✓' if loop.index in solved else p.category }}</small></a>{% endfor %}</aside><section class="problem-detail"><small>{{ catalog[n-1].category }} / PROBLEM {{ '%02d'|format(n) }} · {{ catalog[n-1].points }} PT</small><h1>{{ catalog[n-1].title }}</h1><p class="problem-description">{{ n ~ '번 문제입니다.' if n in osint_problems else 'Hacklipse 소개 페이지입니다.' if pilot and n == 1 else catalog[n-1].description }}</p>
+{% if n in osint_problems %}
+<p class="challenge-download"><a href="{{ url_for('attachment', n=n) }}">[ 문제 파일 다운로드 ]</a></p>
+{% elif pilot and n in web_problems %}{% if env and env[0] == n and env[1] not in ('site', '') %}
 {% set address = url_for('club_site', instance=env[1], asset='index.html') if n == 1 else env[1] %}
 <div id="instance-details">
   <p>접속 주소 <a href="{{ address }}" target="_blank" rel="noopener" data-instance-url>접속하기 ↗</a></p>

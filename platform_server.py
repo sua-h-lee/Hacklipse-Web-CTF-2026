@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import click
-from flask import Flask, Response, abort, flash, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, flash, redirect, render_template, request, send_file, session, url_for
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("CTF_DATA", ROOT / "instance"))
@@ -31,17 +31,21 @@ app.config.update(SECRET_KEY=os.environ.get("SECRET_KEY") or key.read_text(),
 pilot = os.getenv("CTF_PILOT") == "1"
 member_origin = os.getenv("CTF_MEMBER_ORIGIN", "").rstrip("/")
 web_problems = {1, 2} if member_origin else {1}
-flags = [f"HKL{{testflag{n}}}" for n in range(1, 16)] if pilot else json.loads(os.getenv("CTF_FLAGS_JSON", "[]"))
-if not pilot and flags and (not isinstance(flags, list) or len(flags) != 15 or
-              not all(isinstance(f, str) and re.fullmatch(r"HKL\{[^{}\r\n]+\}", f) for f in flags) or len(set(flags)) != 15):
-    raise ValueError("Configure 15 distinct HKL{...} flags")
+osint_problems = {7, 8}
+flags = [f"HKL{{testflag{n}}}" for n in range(1, 9)] if pilot else json.loads(os.getenv("CTF_FLAGS_JSON", "[]"))
+if not pilot and flags and (not isinstance(flags, list) or len(flags) != 8 or
+              not all(isinstance(f, str) and re.fullmatch(r"HKL\{[^{}\r\n]+\}", f) for f in flags) or len(set(flags)) != 8):
+    raise ValueError("Configure 8 distinct HKL{...} flags")
 catalog = [{"title": f"문제 {n:02}", "description": "문제 설명을 준비하고 있습니다.", "points": 100}
-           for n in range(1, 16)]
+           for n in range(1, 9)]
 if os.getenv("CTF_CATALOG"):
     catalog = json.loads(Path(os.environ["CTF_CATALOG"]).read_text())
-    if len(catalog) != 15 or any(not isinstance(p["points"], int) or p["points"] < 0 or
-                                 not all(isinstance(p[k], str) for k in ("title", "description")) for p in catalog):
+    if not isinstance(catalog, list) or len(catalog) != 8 or any(not isinstance(p, dict) or
+                                 not isinstance(p.get("points"), int) or p["points"] < 0 or
+                                 not all(isinstance(p.get(k), str) for k in ("title", "description")) for p in catalog):
         raise ValueError("Invalid challenge catalog")
+for index, problem in enumerate(catalog, 1):
+    problem["category"] = "OSINT" if index in osint_problems else "WEB"
 
 
 @contextmanager
@@ -121,10 +125,25 @@ def home(n=1):
     validate_problem(n)
     player = session["account"]
     with database() as db:
-        solved = {i + 1 for i, in db.execute("SELECT flag_id FROM solves WHERE player=?", (player,))}
+        solved = {i + 1 for i, in db.execute("SELECT flag_id FROM solves WHERE player=? AND flag_id BETWEEN 0 AND ?", (player, len(catalog)-1))}
         env = db.execute("SELECT problem,url,expires FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
+    categories = [{"name": name, "total": sum(p["category"] == name for p in catalog),
+                   "solved": sum(catalog[i-1]["category"] == name for i in solved if 1 <= i <= len(catalog))}
+                  for name in ("WEB", "OSINT")]
     return render_template("platform.html", catalog=catalog, n=n, solved=solved, env=env,
-                           pilot=pilot, web_problems=web_problems, now=time.time(), active_sample=flags[n-1] if pilot and env and env[0]==n else None, score=sum(catalog[i-1]["points"] for i in solved))
+                           pilot=pilot, web_problems=web_problems, osint_problems=osint_problems,
+                           categories=categories, now=time.time(), active_sample=flags[n-1] if pilot and env and env[0]==n else None,
+                           score=sum(catalog[i-1]["points"] for i in solved if 1 <= i <= len(catalog)),
+                           max_score=sum(p["points"] for p in catalog))
+
+
+@app.get("/problems/<int:n>/attachment")
+def attachment(n):
+    if n not in osint_problems:
+        abort(404)
+    filename = f"problem-{n:02}.zip"
+    return send_file(ROOT / "attachments" / filename, as_attachment=True,
+                     download_name=filename, mimetype="application/zip")
 
 
 def stop_environment(db, player, n, expected=None):
@@ -231,6 +250,8 @@ def club_site(instance, asset):
 @app.post("/problems/<int:n>/start")
 def start(n):
     validate_problem(n)
+    if n in osint_problems:
+        abort(404)
     base, token = os.getenv("CTF_RUNNER_URL"), os.getenv("CTF_RUNNER_TOKEN")
     if not base or not token:
         if pilot:
