@@ -30,7 +30,8 @@ app.config.update(SECRET_KEY=os.environ.get("SECRET_KEY") or key.read_text(),
                   SESSION_COOKIE_SECURE=os.getenv("CTF_HTTPS") == "1", MAX_CONTENT_LENGTH=8192)
 pilot = os.getenv("CTF_PILOT") == "1"
 member_origin = os.getenv("CTF_MEMBER_ORIGIN", "").rstrip("/")
-web_problems = {1, 2} if member_origin else {1}
+instance_origin = os.getenv("CTF_INSTANCE_ORIGIN", "").rstrip("/")
+web_problems = set(range(1, 7))
 osint_problems = {7, 8}
 flags = [f"HKL{{testflag{n}}}" for n in range(1, 9)] if pilot else json.loads(os.getenv("CTF_FLAGS_JSON", "[]"))
 if not pilot and flags and (not isinstance(flags, list) or len(flags) != 8 or
@@ -132,7 +133,7 @@ def home(n=1):
                   for name in ("WEB", "OSINT")]
     return render_template("platform.html", catalog=catalog, n=n, solved=solved, env=env,
                            pilot=pilot, web_problems=web_problems, osint_problems=osint_problems,
-                           categories=categories, now=time.time(), active_sample=flags[n-1] if pilot and env and env[0]==n else None,
+                           categories=categories, now=time.time(),
                            score=sum(catalog[i-1]["points"] for i in solved if 1 <= i <= len(catalog)),
                            max_score=sum(p["points"] for p in catalog))
 
@@ -152,7 +153,8 @@ def stop_environment(db, player, n, expected=None):
         return
     base = os.getenv("CTF_RUNNER_URL", "").rstrip("/")
     token = os.getenv("CTF_RUNNER_TOKEN")
-    if not token or not base.startswith("https://"):
+    endpoint = urlsplit(base)
+    if not token or (endpoint.scheme != "https" and not (endpoint.scheme == "http" and endpoint.hostname in ("127.0.0.1", "::1", "localhost"))):
         raise ValueError("Invalid runner configuration")
     req = Request(f"{base}/environments/{player}/{n}", method="DELETE",
                   headers={"Authorization": "Bearer " + token})
@@ -265,12 +267,10 @@ def start(n):
             old = db.execute("SELECT problem,url FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
             web_problem = pilot and n in web_problems
             if not web_problem and db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
-                return {"solved": True} if pilot and not web_problem else redirect(url_for("home", n=n))
+                return redirect(url_for("home", n=n))
             if web_problem and old and old[0] == n and old[1] not in ("site", ""):
                 return redirect(url_for("home", n=n), code=303)
             if not web_problem and old and old[0] == n:
-                if pilot:
-                    return {"sample": flags[n-1]}
                 return redirect(url_for("home", n=n))
             if not pilot and old and request.form.get("replace") != str(old[0]):
                 flash("현재 실행 중인 환경을 확인해 주세요.")
@@ -281,42 +281,43 @@ def start(n):
             req = Request(base.rstrip("/") + "/environments/" + player, method="PUT",
                           data=json.dumps({"problem": n, "ttl_seconds": 1800}).encode(),
                           headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
-            with runner_client.open(req, timeout=5) as response:
+            with runner_client.open(req, timeout=75) as response:
                 payload = response.read(8193)
                 if len(payload) > 8192:
                     raise ValueError("Invalid runner response size")
                 result = json.loads(payload)
             if pilot:
                 expiry = float(result["expires"])
-                if web_problem:
-                    if not time.time() < expiry <= time.time() + 1810:
-                        raise ValueError("Invalid web environment")
-                    if n == 1:
-                        if result.get("web") is not True:
-                            raise ValueError("Invalid static environment")
-                        instance = secrets.token_urlsafe(24)
-                    else:
-                        instance = result["url"]
-                        address = urlsplit(instance)
-                        origin = urlsplit(member_origin)
-                        if address.scheme != "https" or address.netloc != origin.netloc or not address.path.startswith("/"):
-                            raise ValueError("Invalid member instance address")
-                    db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,instance,expiry))
-                    return redirect(url_for("home", n=n), code=303)
-                sample = result["sample"]
-                if sample != flags[n-1] or not time.time() < expiry <= time.time()+1800:
-                    raise ValueError("Invalid test fixture")
-                db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,"",expiry))
-                return {"sample": sample}
+                if not time.time() < expiry <= time.time() + 1810:
+                    raise ValueError("Invalid web environment")
+                if n == 1:
+                    if result.get("web") is not True:
+                        raise ValueError("Invalid static environment")
+                    instance = secrets.token_urlsafe(24)
+                else:
+                    instance = result["url"]
+                    address = urlsplit(instance)
+                    origin = urlsplit(member_origin if n == 2 else instance_origin)
+                    path_prefix = "/member/" if n == 2 else "/instances/"
+                    if (address.scheme != "https" or not origin.netloc or
+                            address.netloc != origin.netloc or not address.path.startswith(path_prefix) or
+                            address.netloc == request.host):
+                        raise ValueError("Invalid challenge instance address")
+                db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,instance,expiry))
+                return redirect(url_for("home", n=n), code=303)
             link, expires = result["url"], float(result["expires"])
             if urlsplit(link).scheme not in ("http","https") or not urlsplit(link).hostname or not time.time() < expires < time.time()+1810:
                 raise ValueError()
+            if n in (3, 4, 5, 6):
+                address, origin = urlsplit(link), urlsplit(instance_origin)
+                if (address.scheme != "https" or not origin.netloc or
+                        address.netloc != origin.netloc or not address.path.startswith("/instances/") or
+                        address.netloc == request.host):
+                    raise ValueError("Invalid challenge instance address")
             db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,link,expires))
     except (URLError, OSError, ValueError, TypeError, KeyError, sqlite3.OperationalError):
         if pilot and n in web_problems:
             flash("인스턴스를 시작하지 못했습니다. 다시 시도해 주세요.")
             return redirect(url_for("home", n=n), code=303)
-        if pilot:
-            return {"error": "테스트 환경을 시작하지 못했습니다."}, 503
         flash("환경을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.")
     return redirect(url_for("home", n=n))
