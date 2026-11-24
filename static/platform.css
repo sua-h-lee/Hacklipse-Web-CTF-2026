@@ -5,7 +5,7 @@ button::after { content:' ]' }
 a:hover, button:hover { text-decoration:underline }
 .on { color:#55ff55 }
 aside .on::before { content:'> '; }
-.grid { display:grid; grid-template-columns:minmax(16ch,28ch) minmax(0,1fr); gap:3ch }
+.grid { display:grid; grid-template-columns:minmax(16ch,24ch) minmax(0,1fr); gap:3ch }
 aside a { display:flex; justify-content:space-between; gap:1ch; line-height:1.5 }
 aside a small { white-space:nowrap }
 small { font:inherit; color:#aaa }
@@ -18,7 +18,8 @@ label { white-space:normal }
 .command input { flex:1; width:auto; max-width:none; border:0; outline:none; caret-color:#eee; caret-shape:block }
 .command:focus-within label { color:#fff }
 
-.answer.command { flex-direction:row; align-items:baseline; gap:1ch; width:min(48ch,100%); max-width:100% }
+.answer.command { flex-direction:row; align-items:baseline; gap:1ch; width:100%; max-width:none }
+.answer.command label { flex:none; white-space:nowrap }
 .answer.command input[name="flag"] { flex:1; width:auto; min-width:0; border-bottom:1px solid #888 }
 
 .boot-screen {
@@ -38,8 +39,8 @@ label { white-space:normal }
 .login-screen .command input { width: 20ch; max-width: 42vw; caret-color: #fff; }
 .login-screen .user, .login-screen button, .login-screen .command:focus-within label { color: #fff; }
 .problem-screen { display:grid; justify-items:center; align-items:start; grid-template-rows:auto 1fr; min-height:100svh; padding:0; }
-.competition-header { width:min(88ch,100%); display:flex; align-items:center; justify-content:space-between; gap:2ch; padding:12px clamp(12px,3vw,40px); }
-.problem-screen main { width:min(88ch,100%); padding:0 clamp(12px,3vw,40px) 2rem; }
+.competition-header { width:min(118ch,100%); display:flex; align-items:center; justify-content:space-between; gap:2ch; padding:12px clamp(12px,3vw,40px); }
+.problem-screen main { width:min(118ch,100%); padding:0 clamp(12px,3vw,40px) 2rem; }
 .player-status { margin:0.75em 0 2.25em; padding:0.8em 1em; border:1px solid #444 }
 .status-prompt { margin:0 0 0.65em }
 .status-row { display:grid; grid-template-columns:12ch minmax(0,1fr); gap:1em; max-width:32ch; padding:0.15em 0 }
@@ -47,3 +48,4 @@ label { white-space:normal }
 .status-categories { margin-top:0.55em; padding-top:0.55em; border-top:1px dashed #444 }
 .problem-description { white-space:pre-line; line-height:1.65 }
 .challenge-download { margin:1.5em 0 }
+@media(max-width:650px){.answer.command{flex-wrap:wrap}.answer.command label{white-space:normal}.answer.command input[name="flag"]{min-width:min(24ch,100%)}}

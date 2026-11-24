@@ -1,4 +1,4 @@
-<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hacklipse CTF 2026</title><link rel="stylesheet" href="/static/terminal.css"><link rel="stylesheet" href="/static/platform.css?v=17"><body class="{{ 'boot-screen login-screen' if login else 'problem-screen' }}">
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hacklipse CTF 2026</title><link rel="stylesheet" href="/static/terminal.css"><link rel="stylesheet" href="/static/platform.css?v=18"><body class="{{ 'boot-screen login-screen' if login else 'problem-screen' }}">
 {% macro csrf() %}<input type="hidden" name="csrf" value="{{ session.csrf }}">{% endmacro %}
 {% if not login %}<header class="competition-header"><strong>Hacklipse Web CTF 2026</strong><form method="post" action="/logout">{{ csrf() }}<button>로그아웃</button></form></header>{% endif %}
 <main>
@@ -26,4 +26,4 @@
 {% if env and env[0] == n %}
 <form method="post" action="{{ url_for('stop', n=n) }}">{{ csrf() }}<input type="hidden" name="instance" value="{{ env[1] }}"><button>종료하기</button></form>
 {% endif %}
-<form class="answer command" method="post" action="/problems/{{ n }}/submit">{{ csrf() }}<label for="flag">submit</label><input id="flag" aria-label="플래그" required name="flag" autocomplete="off" spellcheck="false" autocapitalize="off" enterkeyhint="go" maxlength="1024"><button class="sr-only">제출</button></form></section></div>{% endif %}</main></body></html>
+<form class="answer command" method="post" action="/problems/{{ n }}/submit">{{ csrf() }}<label for="flag"><span class="user">{{ session.get("name", "player") }}@hacklipse</span>:<span class="directory">~/problems/{{ n }}</span>$ submit</label><input id="flag" aria-label="플래그" required name="flag" autocomplete="off" spellcheck="false" autocapitalize="off" enterkeyhint="go" maxlength="1024"><button class="sr-only">제출</button></form></section></div>{% endif %}</main></body></html>
