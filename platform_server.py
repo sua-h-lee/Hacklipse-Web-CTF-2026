@@ -29,6 +29,8 @@ app.config.update(SECRET_KEY=os.environ.get("SECRET_KEY") or key.read_text(),
                   SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.getenv("CTF_HTTPS") == "1", MAX_CONTENT_LENGTH=8192)
 pilot = os.getenv("CTF_PILOT") == "1"
+member_origin = os.getenv("CTF_MEMBER_ORIGIN", "").rstrip("/")
+web_problems = {1, 2} if member_origin else {1}
 flags = [f"HKL{{testflag{n}}}" for n in range(1, 16)] if pilot else json.loads(os.getenv("CTF_FLAGS_JSON", "[]"))
 if not pilot and flags and (not isinstance(flags, list) or len(flags) != 15 or
               not all(isinstance(f, str) and re.fullmatch(r"HKL\{[^{}\r\n]+\}", f) for f in flags) or len(set(flags)) != 15):
@@ -122,7 +124,7 @@ def home(n=1):
         solved = {i + 1 for i, in db.execute("SELECT flag_id FROM solves WHERE player=?", (player,))}
         env = db.execute("SELECT problem,url,expires FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
     return render_template("platform.html", catalog=catalog, n=n, solved=solved, env=env,
-                           pilot=pilot, now=time.time(), active_sample=flags[n-1] if pilot and env and env[0]==n else None, score=sum(catalog[i-1]["points"] for i in solved))
+                           pilot=pilot, web_problems=web_problems, now=time.time(), active_sample=flags[n-1] if pilot and env and env[0]==n else None, score=sum(catalog[i-1]["points"] for i in solved))
 
 
 def stop_environment(db, player, n, expected=None):
@@ -240,7 +242,7 @@ def start(n):
         with database() as db:
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT problem,url FROM environments WHERE player=? AND expires>?", (player,time.time())).fetchone()
-            web_problem = pilot and n == 1
+            web_problem = pilot and n in web_problems
             if not web_problem and db.execute("SELECT 1 FROM solves WHERE player=? AND flag_id=?", (player,n-1)).fetchone():
                 return {"solved": True} if pilot and not web_problem else redirect(url_for("home", n=n))
             if web_problem and old and old[0] == n and old[1] not in ("site", ""):
@@ -266,9 +268,18 @@ def start(n):
             if pilot:
                 expiry = float(result["expires"])
                 if web_problem:
-                    if result.get("web") is not True or not time.time() < expiry <= time.time()+1810:
+                    if not time.time() < expiry <= time.time() + 1810:
                         raise ValueError("Invalid web environment")
-                    instance = secrets.token_urlsafe(24)
+                    if n == 1:
+                        if result.get("web") is not True:
+                            raise ValueError("Invalid static environment")
+                        instance = secrets.token_urlsafe(24)
+                    else:
+                        instance = result["url"]
+                        address = urlsplit(instance)
+                        origin = urlsplit(member_origin)
+                        if address.scheme != "https" or address.netloc != origin.netloc or not address.path.startswith("/"):
+                            raise ValueError("Invalid member instance address")
                     db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,instance,expiry))
                     return redirect(url_for("home", n=n), code=303)
                 sample = result["sample"]
@@ -281,6 +292,9 @@ def start(n):
                 raise ValueError()
             db.execute("INSERT OR REPLACE INTO environments VALUES (?,?,?,?)", (player,n,link,expires))
     except (URLError, OSError, ValueError, TypeError, KeyError, sqlite3.OperationalError):
+        if pilot and n in web_problems:
+            flash("인스턴스를 시작하지 못했습니다. 다시 시도해 주세요.")
+            return redirect(url_for("home", n=n), code=303)
         if pilot:
             return {"error": "테스트 환경을 시작하지 못했습니다."}, 503
         flash("환경을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.")

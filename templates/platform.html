@@ -7,15 +7,15 @@
 {% else %}
 <p class="player-score">{{ session.get("name", "player") }} · 내 점수 <strong>{{ score }}점</strong> · {{ solved|length }} / 15 해결</p>
 <div class="grid"><aside aria-label="문제 목록">{% for p in catalog %}<a class="{{ 'on' if loop.index == n }}" href="/problems/{{ loop.index }}">{{ '%02d'|format(loop.index) }} {{ p.title }} <small>{{ '해결' if loop.index in solved }}</small></a>{% endfor %}</aside><section><small>PROBLEM {{ '%02d'|format(n) }} · {{ catalog[n-1].points }} PT</small><h1>{{ catalog[n-1].title }}</h1><p>{{ "Hacklipse 소개 페이지입니다." if pilot and n == 1 else catalog[n-1].description }}</p>
-{% if pilot and n == 1 %}{% if env and env[0] == 1 and env[1] not in ('site', '') %}
-{% set address = url_for('club_site', instance=env[1], asset='index.html') %}
+{% if pilot and n in web_problems %}{% if env and env[0] == n and env[1] not in ('site', '') %}
+{% set address = url_for('club_site', instance=env[1], asset='index.html') if n == 1 else env[1] %}
 <div id="instance-details">
   <p>접속 주소 <a href="{{ address }}" target="_blank" rel="noopener" data-instance-url>접속하기 ↗</a></p>
   <p>인스턴스 종료까지 <time id="instance-clock" data-seconds="{{ env[2] - now }}">30분 이내</time></p>
 </div>
 <script defer src="/static/instance.js"></script>
 {% else %}
-<form method="post" action="/problems/1/start">{{ csrf() }}<button>{{ "접속하기" if n in solved else "인스턴스 생성하기" }}</button></form>
+<form method="post" action="{{ url_for('start', n=n) }}">{{ csrf() }}<button>{{ "접속하기" if n in solved else "인스턴스 생성하기" }}</button></form>
 {% endif %}{% elif n in solved %}<p>해결</p>{% elif pilot and env and env[0]==n %}<output>{{ active_sample }}</output>{% elif pilot %}<form id="pilot-start" method="post" action="/problems/{{ n }}/start">{{ csrf() }}<button>테스트 환경 시작</button></form><output id="pilot-output" aria-live="polite"></output><script defer src="/static/pilot.js"></script>{% elif env and env[0]==n %}<a href="{{ env[1] }}" target="_blank" rel="noopener">내 환경 접속 ↗</a>{% else %}<form method="post" action="/problems/{{ n }}/start">{{ csrf() }}{% if env %}<label><input type="checkbox" required name="replace" value="{{ env[0] }}"> {{ env[0] }}번 환경 종료에 동의합니다.</label>{% endif %}<button>환경 시작</button></form>{% endif %}
 {% if env and env[0] == n %}
 <form method="post" action="{{ url_for('stop', n=n) }}">{{ csrf() }}<input type="hidden" name="instance" value="{{ env[1] }}"><button>종료하기</button></form>
